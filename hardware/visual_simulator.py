@@ -3,7 +3,7 @@ import math
 import time
 
 class VisualMotorSimulator:
-    """Tkinter-based visual motor simulator (runs in main thread)"""
+    """Tkinter-based visual motor simulator"""
     
     def __init__(self):
         self.left_speed = 0
@@ -94,25 +94,25 @@ class VisualMotorSimulator:
         button_frame = tk.Frame(main_frame, bg='#2b2b2b')
         button_frame.pack(pady=20)
 
-        # Simple button commands
+        # Button commands
         def cmd_forward():
-            print("🔵 FORWARD clicked")
+            print("🔵 FORWARD button clicked")
             self.forward(60)
 
         def cmd_backward():
-            print("🔴 BACKWARD clicked")
+            print("🔴 BACKWARD button clicked")
             self.backward(60)
 
         def cmd_left():
-            print("🟡 LEFT clicked")
+            print("🟡 LEFT button clicked")
             self.turn_left(40)
 
         def cmd_right():
-            print("🟡 RIGHT clicked")
+            print("🟡 RIGHT button clicked")
             self.turn_right(40)
 
         def cmd_stop():
-            print("⏹️ STOP clicked")
+            print("⏹️ STOP button clicked")
             self.stop()
 
         btn_forward = tk.Button(button_frame, text="FORWARD", bg='#00ff00', 
@@ -141,8 +141,6 @@ class VisualMotorSimulator:
         self.root.bind('<Left>', lambda event: self.turn_left(40))
         self.root.bind('<Right>', lambda event: self.turn_right(40))
         self.root.bind('<space>', lambda event: self.stop())
-
-        # Also bind arrow keys with alternative names (for some Mac setups)
         self.root.bind('<KP_Up>', lambda event: self.forward(60))
         self.root.bind('<KP_Down>', lambda event: self.backward(60))
         self.root.bind('<KP_Left>', lambda event: self.turn_left(40))
@@ -175,29 +173,29 @@ class VisualMotorSimulator:
         # Draw floor/ground line
         self.canvas.create_line(0, 220, 600, 220, fill='#444444', width=2)
         
-        # Robot body with gradient effect
+        # Robot body
         self.canvas.create_rectangle(200, 100, 400, 200,
                                     fill='#444444', outline='#00ff00',
                                     width=3)
         
-        # Add some texture to body
+        # Add texture
         self.canvas.create_line(220, 120, 380, 120, fill='#666666', width=1)
         self.canvas.create_line(220, 180, 380, 180, fill='#666666', width=1)
         
-        # Camera with light effect
+        # Camera
         self.canvas.create_oval(290, 60, 310, 80,
                               fill='#000000', outline='#00ff00',
                               width=2)
         
         # Camera lens (changes color based on mode)
         if self._get_mode() == "FORWARD":
-            lens_color = '#88ff88'  # Green when moving forward
+            lens_color = '#88ff88'
         elif self._get_mode() == "BACKWARD":
-            lens_color = '#ff8888'  # Red when moving backward
+            lens_color = '#ff8888'
         elif self._get_mode() == "TURNING":
-            lens_color = '#ffff88'  # Yellow when turning
+            lens_color = '#ffff88'
         else:
-            lens_color = '#88aaff'  # Blue when stopped
+            lens_color = '#88aaff'
             
         self.canvas.create_oval(295, 65, 305, 75,
                               fill=lens_color, outline='')
@@ -216,7 +214,7 @@ class VisualMotorSimulator:
             direction = self.left_dir if is_left else self.right_dir
             
             if speed > 0:
-                # Draw spinning effect (rotating line)
+                # Draw spinning effect
                 angle = time.time() * speed * direction
                 x1 = x + 15 * math.cos(angle)
                 y1 = y + 15 * math.sin(angle)
@@ -225,7 +223,7 @@ class VisualMotorSimulator:
                 self.canvas.create_line(x1, y1, x2, y2,
                                        fill='white', width=2)
                 
-                # Draw direction arrow on wheel
+                # Draw direction arrow
                 arrow_x = x + (25 if direction > 0 else -25)
                 self.canvas.create_line(x, y, arrow_x, y, 
                                        fill='yellow', width=2, 
@@ -233,19 +231,16 @@ class VisualMotorSimulator:
         
         # Draw path line based on direction
         if self._get_mode() == "FORWARD":
-            # Show forward path
             self.canvas.create_line(300, 80, 300, 40, 
                                    fill='#00ff00', width=3, arrow='last')
             self.canvas.create_text(300, 20, text="FORWARD", 
                                    fill='#00ff00', font=('Arial', 12, 'bold'))
         elif self._get_mode() == "BACKWARD":
-            # Show backward path
             self.canvas.create_line(300, 220, 300, 260, 
                                    fill='#ff5555', width=3, arrow='last')
             self.canvas.create_text(300, 280, text="BACKWARD", 
                                    fill='#ff5555', font=('Arial', 12, 'bold'))
         elif self._get_mode() == "TURNING":
-            # Show turning arc
             if self.left_dir > 0 and self.right_dir < 0:  # Turning right
                 self.canvas.create_arc(400, 100, 500, 200, 
                                       start=0, extent=90,
@@ -258,15 +253,6 @@ class VisualMotorSimulator:
                                       outline='#ffaa00', width=3, style='arc')
                 self.canvas.create_text(120, 120, text="LEFT", 
                                        fill='#ffaa00', font=('Arial', 12, 'bold'))
-        
-        # Draw status indicators
-        status_y = 240
-        if self.left_speed > 0 or self.right_speed > 0:
-            # Draw speed lines
-            for i in range(int((self.left_speed + self.right_speed) / 20)):
-                x_pos = 200 + i * 30 + (time.time() * 100 % 30)
-                self.canvas.create_oval(x_pos, status_y, x_pos+5, status_y+5,
-                                       fill='#00ff00', outline='')
     
     def _update_display(self):
         """Update the display with current motor states"""
@@ -312,46 +298,38 @@ class VisualMotorSimulator:
             return "TURNING"
     
     # Motor control methods
-    def forward(self, speed=50):
-        print(f"🔵 Moving FORWARD at {speed}%")
+    def forward(self, speed=60):
+        print(f"🔵 Moving FORWARD at {speed}% (changing motor state)")
         self.left_speed = speed
         self.right_speed = speed
         self.left_dir = 1
         self.right_dir = 1
         
-    def backward(self, speed=50):
-        print(f"🔴 Moving BACKWARD at {speed}%")
+    def backward(self, speed=60):
+        print(f"🔴 Moving BACKWARD at {speed}% (changing motor state)")
         self.left_speed = speed
         self.right_speed = speed
         self.left_dir = -1
         self.right_dir = -1
         
-    def turn_left(self, speed=30):
-        print(f"🟡 Turning LEFT at {speed}%")
+    def turn_left(self, speed=40):
+        print(f"🟡 Turning LEFT at {speed}% (changing motor state)")
         self.left_speed = speed
         self.right_speed = speed
         self.left_dir = -1
         self.right_dir = 1
         
-    def turn_right(self, speed=30):
-        print(f"🟡 Turning RIGHT at {speed}%")
+    def turn_right(self, speed=40):
+        print(f"🟡 Turning RIGHT at {speed}% (changing motor state)")
         self.left_speed = speed
         self.right_speed = speed
         self.left_dir = 1
         self.right_dir = -1
         
     def stop(self):
-        print(f"⏹️ STOPPED")
+        print(f"⏹️ STOPPED (changing motor state)")
         self.left_speed = 0
         self.right_speed = 0
-        
-    def _on_key_release(self, event):
-        """Handle key release events"""
-        # If any arrow key is released, stop the robot
-        if event.keysym in ['Up', 'Down', 'Left', 'Right', 
-                            'KP_Up', 'KP_Down', 'KP_Left', 'KP_Right']:
-            print(f"⌨️ Key {event.keysym} released - stopping")
-            self.stop()
         
     def get_state(self):
         return {

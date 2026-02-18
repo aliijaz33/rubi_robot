@@ -5,6 +5,6 @@ class MotorFactory:
     def create_motor_controller(mode='simulation'):
         """Create appropriate motor controller"""
         if mode == 'simulation':
-            return VisualMotorSimulator()  # Don't start GUI yet
+            return VisualMotorSimulator()
         else:
             raise NotImplementedError("Real motor controller not available in simulation mode")

@@ -1,4 +1,4 @@
-    #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test script for Rubi robot with voice control
 """
@@ -11,16 +11,16 @@ from config import Config
 def main():
     """Main test function"""
     
-    print("\n" + "="*60)
-    print("   🤖 RUBI ROBOT - WITH VOICE CONTROL")
-    print("="*60)
-    print("\n📝 Instructions:")
-    print("  • GUI window will open showing the robot")
-    print("  • Use arrow keys to drive manually")
-    print("  • OR use voice commands:")
-    print("    - Say 'Rubi' then wait for response")
-    print("    - Then say: forward/backward/left/right/stop")
-    print("    - Try: 'Rubi hello' or 'Rubi what do you see'")
+    # print("\n" + "="*60)
+    # print("   🤖 RUBI ROBOT - WITH VOICE CONTROL")
+    # print("="*60)
+    # print("\n📝 Instructions:")
+    # print("  • GUI window will open showing the robot")
+    # print("  • Use arrow keys to drive manually")
+    # print("  • OR use voice commands:")
+    # print("    - Say 'Rubi' or 'Hello Rubi'")
+    # print("    - Rubi will respond 'Yes?'")
+    # print("    - Then say: forward/backward/left/right/stop")
     print("  • Close the window to exit\n")
     
     input("Press Enter to start the simulator...")
@@ -42,7 +42,7 @@ def main():
     print("🎮 Controls active:")
     print("   • Keyboard: Arrow keys + Space")
     print("   • Voice: Say 'Rubi' then command")
-    print("\n🎤 Try saying: 'Rubi' ... then 'forward'")
+    print("\n🎤 Try saying: 'Rubi' ... wait for response ... then 'forward'")
     
     # Start the GUI (this blocks until window is closed)
     motors.start_gui()
