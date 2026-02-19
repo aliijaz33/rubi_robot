@@ -1,0 +1,33 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+.python-version
+
+# Large model files
+*.pt
+*.pth
+*.weights
+yolov8*.pt
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.log
