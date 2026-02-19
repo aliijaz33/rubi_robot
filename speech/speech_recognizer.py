@@ -118,6 +118,51 @@ class SpeechRecognizer:
                 print("🔊 Speaker: Saying 'Stopping'")
                 self.speaker.speak("Stopping")
                 
+            elif "what do you see" in command or "what can you see" in command or "describe" in command:
+                print("👀 Processing vision query")
+                self.speaker.speak("Let me look around")
+                
+                # Get camera description
+                if hasattr(self, 'camera') and self.camera:
+                    description = self.camera.describe_scene()
+                    print(f"📝 Scene description: {description}")
+                    self.speaker.speak(description)
+                else:
+                    self.speaker.speak("I don't have a camera yet")
+                    
+            elif "find" in command or "look for" in command or "search" in command:
+                # Extract object to find
+                target = None
+                common_objects = ["chair", "person", "table", "book", "bottle", "cup", "phone", "laptop"]
+                
+                for obj in common_objects:
+                    if obj in command:
+                        target = obj
+                        break
+                
+                if target:
+                    print(f"🔍 Looking for {target}")
+                    self.speaker.speak(f"Looking for {target}")
+                    
+                    # Search for object
+                    if hasattr(self, 'camera') and self.camera:
+                        found = self.camera.find_object(target)
+                        if found:
+                            message = f"I found a {target} to your {found['direction']}, about {found['distance']} meters away"
+                            print(f"✅ Found: {message}")
+                            self.speaker.speak(message)
+                            
+                            # Optional: Add navigation here later
+                            # self.navigate_to_object(found)
+                        else:
+                            message = f"I don't see any {target} nearby"
+                            print(f"❌ {message}")
+                            self.speaker.speak(message)
+                    else:
+                        self.speaker.speak("I can't see without a camera")
+                else:
+                    self.speaker.speak("What should I look for? Try 'find chair' or 'find person'")
+                
             elif "hello" in command or "hi" in command:
                 print("👋 HELLO")
                 print("🔊 Speaker: Saying 'Hello'")
