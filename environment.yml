@@ -1,0 +1,13 @@
+name: rubi_robot
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - opencv
+  - pip
+  - portaudio # needed by PyAudio
+  - pip:
+      - ultralytics
+      - SpeechRecognition
+      - PyAudio

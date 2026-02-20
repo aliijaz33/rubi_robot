@@ -1,4 +1,16 @@
-import tkinter as tk
+
+# tkinter is required for the on‑screen simulator. some Python builds (e.g.
+# pyenv without tcl/tk) omit the `_tkinter` extension and will raise
+# ModuleNotFoundError – those interpreters cannot run the GUI.  Providing a
+# clear error message helps users switch to an appropriate environment.
+try:
+    import tkinter as tk
+except ModuleNotFoundError as e:
+    raise ImportError(
+        "Tkinter is not available in this Python interpreter. "
+        "Use a conda environment or a Python build with Tcl/Tk support."
+    ) from e
+
 import math
 import time
 

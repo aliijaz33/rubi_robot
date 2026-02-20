@@ -1,0 +1,6 @@
+# pip requirements (use if not using conda)
+ultralytics
+SpeechRecognition
+PyAudio
+opencv-python
+numpy
