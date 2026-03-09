@@ -15,24 +15,22 @@ def main():
     print("\n" + "="*60)
     print("   🤖 RUBI ROBOT - WITH VOICE CONTROL & VISION")
     print("="*60)
-    print("\n📝 Instructions:")
-    print("  • GUI window will open showing the robot")
-    print("  • Use arrow keys to drive manually")
-    print("  • Voice commands:")
-    print("    - 'Rubi' → 'Yes?' → forward/backward/left/right/stop")
-    print("    - 'Rubi what do you see' - describes scene")
-    print("    - 'Rubi find chair' - looks for chair")
-    print("    - 'Rubi find person' - looks for people")
-    print("  • Close the window to exit\n")
+    print("\n📝 Voice Commands:")
+    print("  • 'Rubi' → Wake the robot, then say:")
+    print("    - 'forward/backward/left/right' - Move the robot")
+    print("    - 'stop' - Stop all movement")
+    print("    - 'what do you see' - Describe the scene")
+    print("    - 'find chair' / 'find person' - Search for objects")
+    print("  • Press Ctrl+C to exit\n")
     
-    input("Press Enter to start the simulator...")
+    input("Press Enter to start...")
     
     # Create motor controller
     print("\n🔄 Creating robot simulator...")
     motors = MotorFactory.create_motor_controller(Config.get_mode())
     
     # Initialize camera
-    print("\n📷 Initializing camera...")
+    print("📷 Initializing camera...")
     camera = Camera()
     vision_available = camera.initialize()
     if vision_available:
@@ -42,34 +40,32 @@ def main():
         print("⚠️ Vision disabled - continuing without camera")
     
     # Create speech recognizer
-    print("\n🎤 Initializing speech recognition...")
+    print("🎤 Initializing speech recognition...")
     speech = SpeechRecognizer(motors)
     
     # Attach camera to speech recognizer for vision commands
     if vision_available:
         speech.camera = camera
     
-    print("\n✅ All systems ready!")
-    print("🖥️  Opening GUI window...\n")
+    print("✅ All systems ready!\n")
     
     # Start voice recognition in background
     speech.start_listening_loop()
     
-    print("🎮 Controls active:")
-    print("   • Keyboard: Arrow keys + Space")
-    print("   • Voice: Say 'Rubi' then command")
-    if vision_available:
-        print("   • Vision: 'what do you see', 'find chair', 'find person'")
+    print("🎮 GUI window will open now...")
+    print("   • Use arrow keys to drive manually")
+    print("   • Say 'Rubi' then commands for voice control\n")
     
-    # Start the GUI (this blocks until window is closed)
+    # Start the GUI - this BLOCKS until window is closed
+    # The tkinter mainloop runs here
     motors.start_gui()
     
-    # Clean up
+    # This code only runs after GUI window is closed
     print("\n🔄 Shutting down...")
     speech.stop_listening()
     if vision_available:
         camera.stop()
-    print("\n👋 Goodbye!")
+    print("👋 Goodbye!")
 
 if __name__ == "__main__":
     main()
