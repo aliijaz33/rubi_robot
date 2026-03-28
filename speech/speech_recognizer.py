@@ -36,6 +36,10 @@ class SpeechRecognizer:
         
     def listen_for_wake_word(self):
         """Listen for the wake word 'Rubi'"""
+        # Skip if speaker is talking
+        if self.speaker.is_speaking:
+            return False
+            
         with self.microphone as source:
             try:
                 print("👂 Listening for 'Rubi'...")
@@ -60,6 +64,10 @@ class SpeechRecognizer:
                 
     def listen_for_command(self):
         """Listen for a command after wake word"""
+        # Skip if speaker is talking
+        if self.speaker.is_speaking:
+            return "timeout"
+            
         with self.microphone as source:
             try:
                 print("🎯 Listening for command...")
@@ -86,95 +94,99 @@ class SpeechRecognizer:
             
         print(f"⚙️ Processing: '{command}'")
         
-        try:
-            # Check for movement commands - each should CHANGE motor state
-            if "forward" in command:
-                print("➡️ FORWARD command")
-                self.motor.forward(60)
-                print("🔊 Speaker: Saying 'Moving forward'")
-                self.speaker.speak("Moving forward")
+        # Check for stop command first
+        if any(word in command for word in ["stop", "halt", "brake", "stop now", "stop searching"]):
+            print("🛑 STOP command - stopping all movement and search")
+            self.motor.stop()
+            
+            # Stop any ongoing search
+            if hasattr(self, 'searcher') and self.searcher:
+                self.searcher.stop_searching()
                 
-            elif "backward" in command:
-                print("⬅️ BACKWARD command")
-                self.motor.backward(60)
-                print("🔊 Speaker: Saying 'Moving backward'")
-                self.speaker.speak("Moving backward")
+            self.speaker.speak("Stopping")
+            return
+            
+        # Check for movement commands
+        if "forward" in command:
+            print("➡️ FORWARD command")
+            self.motor.forward(60)
+            self.speaker.speak("Moving forward")
+            
+        elif "backward" in command:
+            print("⬅️ BACKWARD command")
+            self.motor.backward(60)
+            self.speaker.speak("Moving backward")
+            
+        elif "left" in command:
+            print("↪️ LEFT command")
+            self.motor.turn_left(40)
+            self.speaker.speak("Turning left")
+            
+        elif "right" in command:
+            print("↩️ RIGHT command")
+            self.motor.turn_right(40)
+            self.speaker.speak("Turning right")
+            
+        elif "what do you see" in command or "what can you see" in command or "describe" in command:
+            print("👀 Processing vision query")
+            self.speaker.speak("Let me look around")
+            
+            # Get camera description
+            if hasattr(self, 'camera') and self.camera:
+                description = self.camera.describe_scene()
+                print(f"📝 Scene description: {description}")
+                self.speaker.speak(description)
+            else:
+                self.speaker.speak("I don't have a camera yet")
                 
-            elif "left" in command:
-                print("↪️ LEFT command")
-                self.motor.turn_left(40)
-                print("🔊 Speaker: Saying 'Turning left'")
-                self.speaker.speak("Turning left")
-                
-            elif "right" in command:
-                print("↩️ RIGHT command")
-                self.motor.turn_right(40)
-                print("🔊 Speaker: Saying 'Turning right'")
-                self.speaker.speak("Turning right")
-                
-            elif "stop" in command:
-                print("🛑 STOP command")
-                self.motor.stop()
-                print("🔊 Speaker: Saying 'Stopping'")
-                self.speaker.speak("Stopping")
-                
-            elif "what do you see" in command or "what can you see" in command or "describe" in command:
-                print("👀 Processing vision query")
-                self.speaker.speak("Let me look around")
-                
-                # Get camera description
-                if hasattr(self, 'camera') and self.camera:
-                    description = self.camera.describe_scene()
-                    print(f"📝 Scene description: {description}")
-                    self.speaker.speak(description)
+        elif "find" in command or "look for" in command or "search" in command:
+            # Extract object to find
+            target = None
+            object_map = {
+                "chair": ["chair", "stool", "seat"],
+                "person": ["person", "people", "human"],
+                "table": ["table", "desk"],
+                "couch": ["couch", "sofa"],
+                "phone": ["phone", "cell phone", "mobile"],
+                "bottle": ["bottle", "water bottle"],
+                "cup": ["cup", "mug"],
+                "book": ["book"],
+                "laptop": ["laptop"],
+                "tv": ["tv", "television", "monitor"]
+            }
+            
+            for obj_type, keywords in object_map.items():
+                if any(keyword in command for keyword in keywords):
+                    target = obj_type
+                    break
+            
+            if target:
+                print(f"🔍 Search command for {target}")
+                if hasattr(self, 'searcher'):
+                    self.searcher.search_for_object(target, pattern='scan')
+                    if hasattr(self, 'debug_window'):
+                        self.debug_window.set_status(f"Searching for {target}...")
                 else:
-                    self.speaker.speak("I don't have a camera yet")
-                    
-            elif "find" in command or "look for" in command or "search" in command:
-                # Extract object to find
-                target = None
-                common_objects = ["chair", "person", "table", "book", "bottle", "cup", "phone", "laptop"]
-                
-                for obj in common_objects:
-                    if obj in command:
-                        target = obj
-                        break
-                
-                if target:
-                    print(f"🔍 Looking for {target}")
-                    self.speaker.speak(f"Looking for {target}")
-                    
-                    # Search for object
-                    if hasattr(self, 'camera') and self.camera:
+                    # Fallback to simple find
+                    if hasattr(self, 'camera'):
                         found = self.camera.find_object(target)
                         if found:
-                            message = f"I found a {target} to your {found['direction']}, about {found['distance']} meters away"
-                            print(f"✅ Found: {message}")
+                            message = f"I found a {found['name']} to your {found['direction']}"
                             self.speaker.speak(message)
-                            
-                            # Optional: Add navigation here later
-                            # self.navigate_to_object(found)
                         else:
-                            message = f"I don't see any {target} nearby"
-                            print(f"❌ {message}")
-                            self.speaker.speak(message)
+                            self.speaker.speak(f"I don't see any {target} nearby")
                     else:
                         self.speaker.speak("I can't see without a camera")
-                else:
-                    self.speaker.speak("What should I look for? Try 'find chair' or 'find person'")
-                
-            elif "hello" in command or "hi" in command:
-                print("👋 HELLO")
-                print("🔊 Speaker: Saying 'Hello'")
-                self.speaker.speak("Hello")
-                
             else:
-                print(f"❓ Unknown: {command}")
-                print("🔊 Speaker: Saying 'Unknown command'")
-                self.speaker.speak("Unknown command")
+                self.speaker.speak("What should I look for?")
                 
-        except Exception as e:
-            print(f"❌ Error processing command: {e}")
+        elif "hello" in command or "hi" in command:
+            print("👋 HELLO")
+            self.speaker.speak("Hello")
+            
+        else:
+            print(f"❓ Unknown: {command}")
+            self.speaker.speak("Unknown command")
             
     def start_listening_loop(self):
         """Continuous listening loop in background thread"""
@@ -192,6 +204,11 @@ class SpeechRecognizer:
             command_timeout_count = 0
             
             while self.listening:
+                # Add a small delay when speaker is active to prevent feedback
+                if self.speaker.is_speaking:
+                    time.sleep(0.5)
+                    continue
+                    
                 if self.listen_for_wake_word():
                     command_timeout_count = 0
                     try:
@@ -203,12 +220,16 @@ class SpeechRecognizer:
                     # Stay in command listening mode until timeout
                     command_loop_active = True
                     while command_loop_active and self.listening:
+                        # Skip if speaker is talking
+                        if self.speaker.is_speaking:
+                            time.sleep(0.5)
+                            continue
+                            
                         command = self.listen_for_command()
                         
                         if command and command not in ["timeout", "unknown"]:
                             print(f"✅ Command received: {command}")
                             self.process_command(command)
-                            # Continue listening for more commands
                             command_timeout_count = 0
                             
                         elif command == "timeout":

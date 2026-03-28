@@ -17,19 +17,27 @@ import time
 class VisualMotorSimulator:
     """Tkinter-based visual motor simulator"""
     
-    def __init__(self):
+    # In visual_simulator.py, add debug_window parameter to __init__
+    def __init__(self, debug_window=None):
         self.left_speed = 0
         self.right_speed = 0
         self.left_dir = 1
         self.right_dir = 1
         self.running = True
         self.root = None
+        self.camera = None  # Add this line
+        self.debug_window = debug_window  # Add this line
         
         print("🤖 Visual simulator initialized (waiting for GUI start...)")
         print("💡 Tip: Buttons will work once GUI opens")
         
     def start_gui(self):
         """Start the GUI (call this from main thread)"""
+        if hasattr(self, 'camera') and self.camera is None and hasattr(self, 'vision_available'):
+            # Try to get camera from where it was stored
+            if hasattr(self, 'vision_available') and self.vision_available:
+                print("📷 Camera available but not attached to simulator")
+        
         self._create_gui()
         
     def _create_gui(self):
@@ -157,6 +165,19 @@ class VisualMotorSimulator:
         self.root.bind('<KP_Down>', lambda event: self.backward(60))
         self.root.bind('<KP_Left>', lambda event: self.turn_left(40))
         self.root.bind('<KP_Right>', lambda event: self.turn_right(40))
+
+        # After creating buttons, before self.root.focus_set()
+        # Create vision debug window if camera is available
+        if hasattr(self, 'camera') and self.camera:
+            try:
+                from vision.debug_window import VisionDebugWindow
+                self.debug_window = VisionDebugWindow(self.camera, self.root)
+                print("✅ Vision debug window created")
+            except Exception as e:
+                print(f"❌ Failed to create vision debug window: {e}")
+                self.debug_window = None
+
+
 
         # Make sure the window can receive keyboard focus
         self.root.focus_set()
@@ -296,6 +317,11 @@ class VisualMotorSimulator:
         # Redraw robot with updated state
         self._draw_robot()
         
+        # Update debug window if it exists
+        if self.debug_window and self.debug_window.running:
+            self.debug_window._update_display()
+
+
         # Schedule next update
         if self.root:
             self.root.after(50, self._update_display)

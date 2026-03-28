@@ -10,7 +10,21 @@ class Speaker:
     
     def __init__(self):
         self.is_speaking = False
-        print("🔊 Text-to-Speech initialized!")
+        self.voice = None
+        
+        # Try to use Karen voice
+        try:
+            # Test if Karen is available
+            result = subprocess.run(['say', '-v', '?'], capture_output=True, text=True)
+            if 'Karen' in result.stdout:
+                self.voice = 'Karen'
+                print("🔊 Using Karen voice")
+            else:
+                self.voice = None
+                print("🔊 Using default voice (Karen not found)")
+        except:
+            self.voice = None
+            print("🔊 Text-to-Speech initialized")
         
     def speak(self, text):
         """Speak text using macOS 'say' command"""
@@ -19,7 +33,10 @@ class Speaker:
             self.is_speaking = True
             
             # Use macOS built-in 'say' command
-            subprocess.run(['say', text], check=True)
+            if self.voice:
+                subprocess.run(['say', '-v', self.voice, text], check=True)
+            else:
+                subprocess.run(['say', text], check=True)
             
             self.is_speaking = False
             print(f"   ✅ Audio complete")
