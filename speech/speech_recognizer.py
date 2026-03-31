@@ -127,7 +127,7 @@ class SpeechRecognizer:
             self.motor.turn_right(40)
             self.speaker.speak("Turning right")
             
-        elif "what do you see" in command or "what can you see" in command or "describe" in command:
+        elif "what do you see" in command or "what can you see" in command or "describe" in command or "tell me" in command:
             print("👀 Processing vision query")
             self.speaker.speak("Let me look around")
             
