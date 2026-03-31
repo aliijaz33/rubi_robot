@@ -197,7 +197,7 @@ class ObjectSearcher:
                 stall_counter += 1
                 print(f"⚠️ Not making progress ({stall_counter}/3)")
                 
-            # If stalled, try to reacquire
+            # 
             if stall_counter >= 3:
                 print("🔄 Stalled, trying to reacquire")
                 #self.speaker.speak("Let me look around")
