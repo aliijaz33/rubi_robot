@@ -155,7 +155,7 @@ class ObjectSearcher:
         # Move towards object with better distance tracking
         target_distance = 1.5  # Stop at 1.5 meters
         approach_speed = 30  # Slower speed for better control
-        max_attempts = 15
+        max_attempts = 10  # Reduced from 15
         attempts = 0
         last_distance = obj['distance']
         stall_counter = 0
@@ -195,10 +195,10 @@ class ObjectSearcher:
                 stall_counter = 0
             else:
                 stall_counter += 1
-                print(f"⚠️ Not making progress ({stall_counter}/3)")
-                
-            # 
-            if stall_counter >= 3:
+                print(f"⚠️ Not making progress ({stall_counter}/2)")
+
+            # Exit sooner if clearly stalled
+            if stall_counter >= 2:
                 print("🔄 Stalled, trying to reacquire")
                 #self.speaker.speak("Let me look around")
                 self.motor.turn_right(30)

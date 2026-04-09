@@ -134,6 +134,8 @@ class SpeechRecognizer:
             if pattern in text:
                 return True
         return False
+
+    def process_command(self, command):
         """Process the voice command and control motors"""
         if not command or command in ["timeout", "unknown"]:
             return

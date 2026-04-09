@@ -26,8 +26,8 @@ class Camera:
         self.search_callback = None
         
         # Performance optimization
-        self.frame_skip = 3  # Process every 3rd frame for less congestion
-        self.detection_interval = 0.15  # Minimum time between detections (was 0.1)
+        self.frame_skip = 2  # Process every 2nd frame
+        self.detection_interval = 0.1  # Minimum time between detections
         self.last_detection_time = 0
         
     def initialize(self):
@@ -129,7 +129,10 @@ class Camera:
                     # Estimate distance (simplified)
                     object_width = x2 - x1
                     if object_width > 0:
-                        distance = 500 / object_width
+                        # More realistic distance formula with bounds
+                        # Assuming a phone is roughly 8cm wide, project to distance
+                        distance = (0.08 * 320) / object_width  # imgsz=320
+                        distance = max(0.3, min(distance, 5.0))  # Clamp between 30cm and 5m
                     else:
                         distance = 0
                     
