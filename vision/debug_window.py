@@ -18,6 +18,7 @@ class VisionDebugWindow:
         self.last_displayed_frame = None
         self.detection_info = []
 
+
         # Frame update optimization
         self.last_info_update = 0
         self.info_update_interval = 0.2  # Update info every 200ms
@@ -77,21 +78,34 @@ class VisionDebugWindow:
 
     def _frame_processor_loop(self):
         """Process frames in background to avoid blocking UI"""
+        skip_counter = 0
         while self.running:
             try:
-                frame = self.camera.draw_detections()
+                skip_counter += 1
+                if skip_counter % 3 != 0:
+                    time.sleep(0.016)
+                    continue
+
+                # During navigation, show raw frame without detection processing (much faster!)
+                # Detection adds overhead - we don't need it when already navigating
+                if self.camera.is_navigating:
+                    frame = self.camera.get_frame()
+                else:
+                    frame = self.camera.draw_detections()
+
                 if frame is not None:
                     # Convert to RGB (process in background)
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frame_rgb = cv2.resize(frame_rgb, (640, 480))
 
-                    # Convert to PhotoImage in background
+                    # Convert to PIL Image in background (fast, safe)
                     img = Image.fromarray(frame_rgb)
-                    self.last_displayed_frame = ImageTk.PhotoImage(image=img)
+                    # Store PIL Image, not PhotoImage (PhotoImage must be created in main thread!)
+                    self.last_displayed_frame = img
             except Exception as e:
                 print(f"Frame processing error: {e}")
 
-            time.sleep(0.033)  # ~30fps for frame processing
+            time.sleep(0.016)  # ~60fps ideal, but skip some frames
 
     def _update_display(self):
         """Update the video feed and detection info (runs on main thread)"""
@@ -99,10 +113,14 @@ class VisionDebugWindow:
             return
 
         try:
-            # Update video label with pre-processed frame
+            # Convert PIL Image to PhotoImage in main thread (Tkinter thread-safe!)
             if self.last_displayed_frame is not None:
-                self.video_label.imgtk = self.last_displayed_frame
-                self.video_label.config(image=self.last_displayed_frame)
+                # Check if it's a PIL Image
+                if isinstance(self.last_displayed_frame, Image.Image):
+                    # Create PhotoImage only in main thread
+                    photo = ImageTk.PhotoImage(image=self.last_displayed_frame)
+                    self.video_label.imgtk = photo
+                    self.video_label.config(image=photo)
 
             # Update detection info less frequently (to reduce overhead)
             current_time = time.time()

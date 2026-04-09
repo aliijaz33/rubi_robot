@@ -9,18 +9,25 @@ from .speaker import Speaker
 
 class SpeechRecognizer:
     """Handles voice commands for Rubi robot"""
-    
+
     def __init__(self, motor_controller):
         self.motor = motor_controller
         self.speaker = Speaker()
         self.recognizer = sr.Recognizer()
-        
+
+        # Set reference in speaker so it can track speaking time
+        self.speaker.recognizer = self
+
         # Use the built-in microphone (index 0)
         self.microphone = sr.Microphone(device_index=0)
-        
+
         self.listening = False
         self.wake_word = "rubi"
-        
+
+        # Track when speaker last spoke to avoid audio feedback
+        self.last_speak_time = 0
+        self.speaker_cooldown = 1.0  # Wait 1 second after speaker finishes (for wake word detection only)
+
         # Adjust recognizer settings
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
@@ -36,12 +43,14 @@ class SpeechRecognizer:
         
     def listen_for_wake_word(self):
         """Listen for the wake word 'Rubi'"""
-        # Skip if speaker is talking - wait longer to ensure audio is done
+        # Don't listen while speaker is active
         if self.speaker.is_speaking:
             return False
 
-        # Small delay to let microphone recover from speaker output
-        time.sleep(0.3)
+        # Wait for microphone to settle after speaker finishes
+        time_since_speak = time.time() - self.last_speak_time
+        if time_since_speak < self.speaker_cooldown:
+            return False
 
         with self.microphone as source:
             try:
@@ -50,10 +59,6 @@ class SpeechRecognizer:
 
                 text = self.recognizer.recognize_google(audio).lower()
                 print(f"📝 Heard: '{text}'")
-
-                # Filter out robot's own speech patterns
-                if self._is_robot_speech(text):
-                    return False
 
                 # Check for wake word
                 if "rubi" in text or "ruby" in text or "rooby" in text or "hello rubi" in text:
@@ -71,13 +76,13 @@ class SpeechRecognizer:
                 
     def listen_for_command(self):
         """Listen for a command after wake word"""
-        # Skip if speaker is talking - wait longer
+        # Don't listen while speaker is active
         if self.speaker.is_speaking:
+            time.sleep(0.1)
             return "timeout"
 
-        # Small delay to let microphone recover from speaker output
-        time.sleep(0.3)
-
+        # For commands, listen immediately after "Yes" is finished
+        # No settling time needed here since we're in focused command mode
         with self.microphone as source:
             try:
                 print("🎯 Listening for command...")
@@ -86,11 +91,7 @@ class SpeechRecognizer:
                 command = self.recognizer.recognize_google(audio).lower()
                 print(f"📝 Command: '{command}'")
 
-                # Filter out robot's own speech patterns
-                if self._is_robot_speech(command):
-                    print("🔇 Ignoring robot's own speech")
-                    return "unknown"
-
+                # Don't filter - just return what we heard
                 return command
 
             except sr.WaitTimeoutError:
@@ -103,37 +104,10 @@ class SpeechRecognizer:
                 print(f"❌ Service error: {e}")
                 return None
 
-    def _is_robot_speech(self, text):
-        """Filter out the robot's own speech patterns to avoid feedback loops"""
-        robot_patterns = [
-            "i found",
-            "still looking",
-            "unknown command",
-            "searching for",
-            "reached the",
-            "moving towards",
-            "moving forward",
-            "moving backward",
-            "turning right",
-            "turning left",
-            "stopping",
-            "goodbye",
-            "rubi ready",
-            "yes",
-            "hello",
-            "let me look",
-            "i don't see",
-            "i have trouble",
-            "i'm having trouble",
-            "let me look around",
-            "what should i look"
-        ]
 
-        # Check if the text matches any robot speech pattern
-        for pattern in robot_patterns:
-            if pattern in text:
-                return True
-        return False
+    def mark_speaker_active(self):
+        """Track when speaker was last used to prevent audio feedback"""
+        self.last_speak_time = time.time()
 
     def process_command(self, command):
         """Process the voice command and control motors"""
@@ -246,38 +220,31 @@ class SpeechRecognizer:
             try:
                 print("🔊 Speaker: Saying 'Rubi ready'")
                 self.speaker.speak("Rubi ready")
+                self.mark_speaker_active()
             except Exception as e:
                 print(f"❌ Speaker error on startup: {e}")
-            
-            command_timeout_count = 0
-            
-            while self.listening:
-                # Wait longer if speaker is active to prevent feedback
-                if self.speaker.is_speaking:
-                    time.sleep(1.0)
-                    continue
 
+            command_timeout_count = 0
+
+            while self.listening:
                 if self.listen_for_wake_word():
                     command_timeout_count = 0
                     try:
                         print("🔊 Speaker: Saying 'Yes'")
                         self.speaker.speak("Yes")
+                        self.mark_speaker_active()
                     except Exception as e:
                         print(f"❌ Speaker error: {e}")
 
                     # Stay in command listening mode until timeout
                     command_loop_active = True
                     while command_loop_active and self.listening:
-                        # Wait longer if speaker is active
-                        if self.speaker.is_speaking:
-                            time.sleep(1.0)
-                            continue
-
                         command = self.listen_for_command()
 
                         if command and command not in ["timeout", "unknown"]:
                             print(f"✅ Command received: {command}")
                             self.process_command(command)
+                            self.mark_speaker_active()
                             command_timeout_count = 0
 
                         elif command == "timeout":
@@ -287,12 +254,14 @@ class SpeechRecognizer:
                                 print("🔄 Exiting command mode, listening for wake word again")
                                 command_loop_active = False
                             else:
-                                # Wait for another command
+                                # Wait briefly before next command listen
+                                time.sleep(0.5)
                                 continue
 
                         elif command == "unknown":
                             print("❌ Command not understood, waiting for next command...")
                             # Continue listening for more commands
+                            time.sleep(0.5)
 
                     time.sleep(0.5)
 

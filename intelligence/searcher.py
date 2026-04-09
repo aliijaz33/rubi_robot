@@ -132,13 +132,15 @@ class ObjectSearcher:
         """Navigate to a detected object"""
         if not self.searching:
             return
-            
+
         self.navigating = True
+        # Disable YOLO detection during navigation to keep camera frames flowing
+        self.camera.is_navigating = True
         print(f"🧭 Navigating to {obj['name']} at distance {obj['distance']}m")
-        
+
         self.speaker.speak(f"Moving towards the {obj['name']}")
         time.sleep(0.5)
-        
+
         # First, align with object
         if obj['direction'] == 'left':
             print("↪️ Aligning left")
@@ -148,46 +150,64 @@ class ObjectSearcher:
             print("↩️ Aligning right")
             self.motor.turn_right(30)
             time.sleep(0.5)
-            
+
         self.motor.stop()
         time.sleep(0.5)
-        
+
         # Move towards object with better distance tracking
-        target_distance = 1.5  # Stop at 1.5 meters
+        target_distance = 0.35  # Stop at ~1 foot (one hand length)
         approach_speed = 30  # Slower speed for better control
-        max_attempts = 10  # Reduced from 15
+        max_attempts = 12  # Allow more attempts for stable approach
         attempts = 0
         last_distance = obj['distance']
         stall_counter = 0
-        
+        lost_object_counter = 0  # Track how many times we lose the object
+
         while self.searching and self.navigating and attempts < max_attempts:
             # Check if search was stopped
             if not self.searching:
                 return
-                
+
             # Get current object position
             current = self.camera.find_object(self.search_target)
-            
+
             if not current:
                 print("👀 Lost sight of object")
-                self.speaker.speak("Lost sight of the object")
-                self.navigating = False
-                # Resume searching
-                if self.searching:
-                    self._scan_pattern()
-                return
-                
+                lost_object_counter += 1
+
+                # Allow losing sight a couple times before giving up
+                if lost_object_counter >= 2:
+                    self.speaker.speak("Lost sight of the object")
+                    self.navigating = False
+                    self.camera.is_navigating = False  # Re-enable YOLO detection
+                    # Resume searching
+                    if self.searching:
+                        self._scan_pattern()
+                    return
+
+                # Try one more approach move before losing sight
+                print(f"   Trying to reach using last known position ({lost_object_counter}/2)")
+                self.motor.forward(approach_speed)
+                time.sleep(0.5)
+                self.motor.stop()
+                time.sleep(0.5)
+                attempts += 1
+                continue
+
+            # Reset lost counter when we see object again
+            lost_object_counter = 0
             current_distance = current['distance']
             print(f"📏 Distance: {current_distance:.1f}m")
-            
+
             # Check if we've reached the target
             if current_distance <= target_distance:
                 print(f"✅ Reached {obj['name']} at {current_distance:.1f}m")
                 self.motor.stop()
                 self.speaker.speak(f"Reached the {obj['name']}")
+                self.camera.is_navigating = False  # Re-enable YOLO detection
                 self.stop_searching()
                 return
-                
+
             # Check if we're making progress
             distance_change = last_distance - current_distance
             if distance_change > 0.05:  # Moving closer
@@ -195,19 +215,20 @@ class ObjectSearcher:
                 stall_counter = 0
             else:
                 stall_counter += 1
-                print(f"⚠️ Not making progress ({stall_counter}/2)")
+                print(f"⚠️ Not making progress ({stall_counter}/3)")
 
             # Exit sooner if clearly stalled
-            if stall_counter >= 2:
+            if stall_counter >= 3:
                 print("🔄 Stalled, trying to reacquire")
-                #self.speaker.speak("Let me look around")
                 self.motor.turn_right(30)
                 time.sleep(0.5)
                 self.motor.stop()
                 stall_counter = 0
                 time.sleep(0.5)
+                # Skip the rest of this iteration and continue
+                attempts += 1
                 continue
-                
+
             # Re-align if object is not centered
             if current['direction'] != 'center':
                 print(f"↪️ Re-aligning to {current['direction']}")
@@ -218,21 +239,22 @@ class ObjectSearcher:
                 time.sleep(0.3)
                 self.motor.stop()
                 time.sleep(0.3)
-            
+
             # Move forward
             print(f"➡️ Moving forward at {approach_speed}%")
             self.motor.forward(approach_speed)
             time.sleep(0.8)
             self.motor.stop()
-            
+
             last_distance = current_distance
             attempts += 1
             time.sleep(0.3)  # Brief pause to let camera update
-            
+
         if self.searching and self.navigating:
             print("❌ Navigation failed - too many attempts")
             self.speaker.speak("I'm having trouble reaching the object")
             self.navigating = False
+            self.camera.is_navigating = False  # Re-enable YOLO detection
             # Resume searching
             if self.searching:
                 time.sleep(0.5)

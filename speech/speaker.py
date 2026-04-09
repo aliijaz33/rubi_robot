@@ -7,11 +7,12 @@ import sys
 
 class Speaker:
     """Handles all speech output for Rubi robot"""
-    
+
     def __init__(self):
         self.is_speaking = False
         self.voice = None
-        
+        self.recognizer = None  # Will be set by SpeechRecognizer
+
         # Try to use Karen voice
         try:
             # Test if Karen is available
@@ -31,13 +32,17 @@ class Speaker:
         try:
             print(f"   🔉 Playing audio: '{text}'")
             self.is_speaking = True
-            
+
+            # Track that we're speaking (notify recognizer)
+            if self.recognizer:
+                self.recognizer.mark_speaker_active()
+
             # Use macOS built-in 'say' command
             if self.voice:
                 subprocess.run(['say', '-v', self.voice, text], check=True)
             else:
                 subprocess.run(['say', text], check=True)
-            
+
             self.is_speaking = False
             print(f"   ✅ Audio complete")
         except Exception as e:

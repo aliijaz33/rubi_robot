@@ -24,11 +24,15 @@ class Camera:
         self.searching = False
         self.search_target = None
         self.search_callback = None
+        self.is_navigating = False  # Flag to disable YOLO during navigation
         
         # Performance optimization
         self.frame_skip = 2  # Process every 2nd frame
         self.detection_interval = 0.1  # Minimum time between detections
+        self.detection_interval_navigation = 0.3  # Slower detection during navigation (reduce blocking)
         self.last_detection_time = 0
+        self.detection_thread = None
+        self.detection_lock = threading.Lock()
         
     def initialize(self):
         """Initialize camera and YOLO model"""
@@ -77,18 +81,32 @@ class Camera:
             ret, frame = self.camera.read()
             if ret:
                 current_time = time.time()
-                
+
                 with self.frame_lock:
                     self.last_frame = frame.copy()
-                
-                # Run detection at optimal intervals
+
+                # During navigation, keep running YOLO detection at a lower rate
+                # so object distance and direction can update while the object moves.
+                if self.is_navigating:
+                    frame_count += 1
+                    time_since_last = current_time - self.last_detection_time
+                    if (frame_count % self.frame_skip == 0 and
+                        time_since_last >= self.detection_interval_navigation):
+                        self._start_detection_thread(frame)
+                    continue
+
+                # Only run detection when actually searching (scanning phase)
+                if not self.searching:
+                    time.sleep(0.001)
+                    continue
+
+                # Run detection at optimal intervals during search/scan
                 frame_count += 1
                 time_since_last = current_time - self.last_detection_time
-                
-                if (frame_count % self.frame_skip == 0 and 
+
+                if (frame_count % self.frame_skip == 0 and
                     time_since_last >= self.detection_interval):
-                    self._detect_objects(frame)
-                    self.last_detection_time = current_time
+                    self._start_detection_thread(frame)
             else:
                 time.sleep(0.001)  # Very short sleep when no frame
                 
@@ -129,9 +147,10 @@ class Camera:
                     # Estimate distance (simplified)
                     object_width = x2 - x1
                     if object_width > 0:
-                        # More realistic distance formula with bounds
-                        # Assuming a phone is roughly 8cm wide, project to distance
-                        distance = (0.08 * 320) / object_width  # imgsz=320
+                        # Use actual frame width for accurate distance calculation
+                        # This is crucial for proper distance estimation as robot approaches
+                        frame_width = frame.shape[1]  # Get actual frame width (640)
+                        distance = (0.08 * frame_width) / object_width  # 0.08m is phone width reference
                         distance = max(0.3, min(distance, 5.0))  # Clamp between 30cm and 5m
                     else:
                         distance = 0
@@ -156,7 +175,18 @@ class Camera:
                 
         except Exception as e:
             print(f"❌ Detection error: {e}")
-            
+
+    def _start_detection_thread(self, frame):
+        """Start a background detection thread if one is not already running."""
+        with self.detection_lock:
+            if self.detection_thread and self.detection_thread.is_alive():
+                return
+            self.last_detection_time = time.time()
+            self.detection_thread = threading.Thread(
+                target=self._detect_objects, args=(frame.copy(),), daemon=True
+            )
+            self.detection_thread.start()
+
     def _check_search_target(self, detected):
         """Check if we found what we're searching for"""
         target_map = {
@@ -252,13 +282,13 @@ class Camera:
             frame = self.get_frame()
         if frame is None:
             return None
-            
+
         objects = self.get_current_objects()
-        
+
         # Draw only the most confident objects (max 5)
         for obj in objects[:5]:
             x1, y1, x2, y2 = obj['bbox']
-            
+
             # Simple coloring
             if obj['name'] == 'person':
                 color = (0, 255, 0)
@@ -268,15 +298,15 @@ class Camera:
                 color = (0, 255, 255)
             else:
                 color = (255, 0, 0)
-            
+
             # Draw box (simpler, no extra text for speed)
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            
-            # Simple label
-            label = f"{obj['name']}"
-            cv2.putText(frame, label, (x1, y1-5), 
+
+            # Label with name and distance
+            label = f"{obj['name']} {obj['distance']}m"
+            cv2.putText(frame, label, (x1, y1-5),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-        
+
         return frame
         
     def start_search(self, target, callback):
@@ -299,6 +329,8 @@ class Camera:
         self.searching = False
         if self.capture_thread and self.capture_thread.is_alive():
             self.capture_thread.join(timeout=1.0)
+        if self.detection_thread and self.detection_thread.is_alive():
+            self.detection_thread.join(timeout=1.0)
         if self.camera:
             self.camera.release()
         print("📷 Camera stopped")
