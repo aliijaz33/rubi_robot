@@ -36,24 +36,31 @@ class SpeechRecognizer:
         
     def listen_for_wake_word(self):
         """Listen for the wake word 'Rubi'"""
-        # Skip if speaker is talking
+        # Skip if speaker is talking - wait longer to ensure audio is done
         if self.speaker.is_speaking:
             return False
-            
+
+        # Small delay to let microphone recover from speaker output
+        time.sleep(0.3)
+
         with self.microphone as source:
             try:
                 print("👂 Listening for 'Rubi'...")
                 audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=2)
-                
+
                 text = self.recognizer.recognize_google(audio).lower()
                 print(f"📝 Heard: '{text}'")
-                
+
+                # Filter out robot's own speech patterns
+                if self._is_robot_speech(text):
+                    return False
+
                 # Check for wake word
                 if "rubi" in text or "ruby" in text or "rooby" in text or "hello rubi" in text:
                     print("🔊 Wake word detected!")
                     return True
                 return False
-                    
+
             except sr.WaitTimeoutError:
                 return False
             except sr.UnknownValueError:
@@ -64,19 +71,28 @@ class SpeechRecognizer:
                 
     def listen_for_command(self):
         """Listen for a command after wake word"""
-        # Skip if speaker is talking
+        # Skip if speaker is talking - wait longer
         if self.speaker.is_speaking:
             return "timeout"
-            
+
+        # Small delay to let microphone recover from speaker output
+        time.sleep(0.3)
+
         with self.microphone as source:
             try:
                 print("🎯 Listening for command...")
                 audio = self.recognizer.listen(source, timeout=3, phrase_time_limit=2)
-                
+
                 command = self.recognizer.recognize_google(audio).lower()
                 print(f"📝 Command: '{command}'")
+
+                # Filter out robot's own speech patterns
+                if self._is_robot_speech(command):
+                    print("🔇 Ignoring robot's own speech")
+                    return "unknown"
+
                 return command
-                
+
             except sr.WaitTimeoutError:
                 print("⏰ No command heard")
                 return "timeout"
@@ -86,8 +102,38 @@ class SpeechRecognizer:
             except sr.RequestError as e:
                 print(f"❌ Service error: {e}")
                 return None
-                
-    def process_command(self, command):
+
+    def _is_robot_speech(self, text):
+        """Filter out the robot's own speech patterns to avoid feedback loops"""
+        robot_patterns = [
+            "i found",
+            "still looking",
+            "unknown command",
+            "searching for",
+            "reached the",
+            "moving towards",
+            "moving forward",
+            "moving backward",
+            "turning right",
+            "turning left",
+            "stopping",
+            "goodbye",
+            "rubi ready",
+            "yes",
+            "hello",
+            "let me look",
+            "i don't see",
+            "i have trouble",
+            "i'm having trouble",
+            "let me look around",
+            "what should i look"
+        ]
+
+        # Check if the text matches any robot speech pattern
+        for pattern in robot_patterns:
+            if pattern in text:
+                return True
+        return False
         """Process the voice command and control motors"""
         if not command or command in ["timeout", "unknown"]:
             return
@@ -204,11 +250,11 @@ class SpeechRecognizer:
             command_timeout_count = 0
             
             while self.listening:
-                # Add a small delay when speaker is active to prevent feedback
+                # Wait longer if speaker is active to prevent feedback
                 if self.speaker.is_speaking:
-                    time.sleep(0.5)
+                    time.sleep(1.0)
                     continue
-                    
+
                 if self.listen_for_wake_word():
                     command_timeout_count = 0
                     try:
@@ -216,22 +262,22 @@ class SpeechRecognizer:
                         self.speaker.speak("Yes")
                     except Exception as e:
                         print(f"❌ Speaker error: {e}")
-                    
+
                     # Stay in command listening mode until timeout
                     command_loop_active = True
                     while command_loop_active and self.listening:
-                        # Skip if speaker is talking
+                        # Wait longer if speaker is active
                         if self.speaker.is_speaking:
-                            time.sleep(0.5)
+                            time.sleep(1.0)
                             continue
-                            
+
                         command = self.listen_for_command()
-                        
+
                         if command and command not in ["timeout", "unknown"]:
                             print(f"✅ Command received: {command}")
                             self.process_command(command)
                             command_timeout_count = 0
-                            
+
                         elif command == "timeout":
                             command_timeout_count += 1
                             print(f"⏰ Command timeout #{command_timeout_count}")
@@ -241,13 +287,13 @@ class SpeechRecognizer:
                             else:
                                 # Wait for another command
                                 continue
-                                
+
                         elif command == "unknown":
                             print("❌ Command not understood, waiting for next command...")
                             # Continue listening for more commands
-                            
+
                     time.sleep(0.5)
-                        
+
                 time.sleep(0.1)
                 
         thread = threading.Thread(target=listen_loop)

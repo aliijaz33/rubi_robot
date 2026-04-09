@@ -26,8 +26,8 @@ class Camera:
         self.search_callback = None
         
         # Performance optimization
-        self.frame_skip = 2  # Process every 2nd frame (was 3)
-        self.detection_interval = 0.1  # Minimum time between detections
+        self.frame_skip = 3  # Process every 3rd frame for less congestion
+        self.detection_interval = 0.15  # Minimum time between detections (was 0.1)
         self.last_detection_time = 0
         
     def initialize(self):
