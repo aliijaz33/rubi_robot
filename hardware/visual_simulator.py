@@ -13,6 +13,7 @@ except ModuleNotFoundError as e:
 
 import math
 import time
+import threading
 
 class VisualMotorSimulator:
     """Tkinter-based visual motor simulator"""
@@ -27,6 +28,7 @@ class VisualMotorSimulator:
         self.root = None
         self.camera = None  # Add this line
         self.debug_window = debug_window  # Add this line
+        self._lock = threading.Lock()  # Thread safety for motor state
         
         print("🤖 Visual simulator initialized (waiting for GUI start...)")
         print("💡 Tip: Buttons will work once GUI opens")
@@ -203,6 +205,13 @@ class VisualMotorSimulator:
         """Draw the robot on canvas with animation"""
         self.canvas.delete("all")
         
+        # Get current motor state under lock
+        state = self.get_state()
+        left_speed = state['left_speed']
+        right_speed = state['right_speed']
+        left_dir = state['left_dir']
+        right_dir = state['right_dir']
+        
         # Draw floor/ground line
         self.canvas.create_line(0, 220, 600, 220, fill='#444444', width=2)
         
@@ -221,11 +230,12 @@ class VisualMotorSimulator:
                               width=2)
         
         # Camera lens (changes color based on mode)
-        if self._get_mode() == "FORWARD":
+        mode = self._get_mode()
+        if mode == "FORWARD":
             lens_color = '#88ff88'
-        elif self._get_mode() == "BACKWARD":
+        elif mode == "BACKWARD":
             lens_color = '#ff8888'
-        elif self._get_mode() == "TURNING":
+        elif mode == "TURNING":
             lens_color = '#ffff88'
         else:
             lens_color = '#88aaff'
@@ -243,8 +253,8 @@ class VisualMotorSimulator:
             
             # Determine if this is left or right wheel
             is_left = x < 300
-            speed = self.left_speed if is_left else self.right_speed
-            direction = self.left_dir if is_left else self.right_dir
+            speed = left_speed if is_left else right_speed
+            direction = left_dir if is_left else right_dir
             
             if speed > 0:
                 # Draw spinning effect
@@ -258,39 +268,46 @@ class VisualMotorSimulator:
                 
                 # Draw direction arrow
                 arrow_x = x + (25 if direction > 0 else -25)
-                self.canvas.create_line(x, y, arrow_x, y, 
-                                       fill='yellow', width=2, 
+                self.canvas.create_line(x, y, arrow_x, y,
+                                       fill='yellow', width=2,
                                        arrow='last' if direction > 0 else 'first')
         
         # Draw path line based on direction
-        if self._get_mode() == "FORWARD":
-            self.canvas.create_line(300, 80, 300, 40, 
+        if mode == "FORWARD":
+            self.canvas.create_line(300, 80, 300, 40,
                                    fill='#00ff00', width=3, arrow='last')
-            self.canvas.create_text(300, 20, text="FORWARD", 
+            self.canvas.create_text(300, 20, text="FORWARD",
                                    fill='#00ff00', font=('Arial', 12, 'bold'))
-        elif self._get_mode() == "BACKWARD":
-            self.canvas.create_line(300, 220, 300, 260, 
+        elif mode == "BACKWARD":
+            self.canvas.create_line(300, 220, 300, 260,
                                    fill='#ff5555', width=3, arrow='last')
-            self.canvas.create_text(300, 280, text="BACKWARD", 
+            self.canvas.create_text(300, 280, text="BACKWARD",
                                    fill='#ff5555', font=('Arial', 12, 'bold'))
-        elif self._get_mode() == "TURNING":
-            if self.left_dir > 0 and self.right_dir < 0:  # Turning right
-                self.canvas.create_arc(400, 100, 500, 200, 
+        elif mode == "TURNING":
+            if left_dir > 0 and right_dir < 0:  # Turning right
+                self.canvas.create_arc(400, 100, 500, 200,
                                       start=0, extent=90,
                                       outline='#ffaa00', width=3, style='arc')
-                self.canvas.create_text(480, 120, text="RIGHT", 
+                self.canvas.create_text(480, 120, text="RIGHT",
                                        fill='#ffaa00', font=('Arial', 12, 'bold'))
             else:  # Turning left
-                self.canvas.create_arc(100, 100, 200, 200, 
+                self.canvas.create_arc(100, 100, 200, 200,
                                       start=90, extent=90,
                                       outline='#ffaa00', width=3, style='arc')
-                self.canvas.create_text(120, 120, text="LEFT", 
+                self.canvas.create_text(120, 120, text="LEFT",
                                        fill='#ffaa00', font=('Arial', 12, 'bold'))
     
     def _update_display(self):
         """Update the display with current motor states"""
         if not self.root:
             return
+        
+        # Get current motor state under lock
+        state = self.get_state()
+        left_speed = state['left_speed']
+        right_speed = state['right_speed']
+        left_dir = state['left_dir']
+        right_dir = state['right_dir']
             
         # Update mode
         mode = self._get_mode()
@@ -298,21 +315,21 @@ class VisualMotorSimulator:
         
         # Update left motor
         self.left_canvas.delete("all")
-        bar_width = int((self.left_speed / 100) * 200)
-        color = '#ff5555' if self.left_dir > 0 else '#ff8888'
+        bar_width = int((left_speed / 100) * 200)
+        color = '#ff5555' if left_dir > 0 else '#ff8888'
         self.left_canvas.create_rectangle(0, 0, bar_width, 30,
                                          fill=color, outline='')
-        dir_text = "FWD" if self.left_dir > 0 else "REV"
-        self.left_value.config(text=f"{self.left_speed}% | DIR: {dir_text}")
+        dir_text = "FWD" if left_dir > 0 else "REV"
+        self.left_value.config(text=f"{left_speed}% | DIR: {dir_text}")
         
         # Update right motor
         self.right_canvas.delete("all")
-        bar_width = int((self.right_speed / 100) * 200)
-        color = '#5555ff' if self.right_dir > 0 else '#8888ff'
+        bar_width = int((right_speed / 100) * 200)
+        color = '#5555ff' if right_dir > 0 else '#8888ff'
         self.right_canvas.create_rectangle(0, 0, bar_width, 30,
                                           fill=color, outline='')
-        dir_text = "FWD" if self.right_dir > 0 else "REV"
-        self.right_value.config(text=f"{self.right_speed}% | DIR: {dir_text}")
+        dir_text = "FWD" if right_dir > 0 else "REV"
+        self.right_value.config(text=f"{right_speed}% | DIR: {dir_text}")
         
         # Redraw robot with updated state
         self._draw_robot()
@@ -328,54 +345,61 @@ class VisualMotorSimulator:
     
     def _get_mode(self):
         """Determine current movement mode"""
-        if self.left_speed == 0 and self.right_speed == 0:
-            return "STOPPED"
-        elif self.left_dir == self.right_dir:
-            return "FORWARD" if self.left_dir > 0 else "BACKWARD"
-        else:
-            return "TURNING"
+        with self._lock:
+            if self.left_speed == 0 and self.right_speed == 0:
+                return "STOPPED"
+            elif self.left_dir == self.right_dir:
+                return "FORWARD" if self.left_dir > 0 else "BACKWARD"
+            else:
+                return "TURNING"
     
     # Motor control methods
     def forward(self, speed=60):
         print(f"🔵 Moving FORWARD at {speed}% (changing motor state)")
-        self.left_speed = speed
-        self.right_speed = speed
-        self.left_dir = 1
-        self.right_dir = 1
+        with self._lock:
+            self.left_speed = speed
+            self.right_speed = speed
+            self.left_dir = 1
+            self.right_dir = 1
         
     def backward(self, speed=60):
         print(f"🔴 Moving BACKWARD at {speed}% (changing motor state)")
-        self.left_speed = speed
-        self.right_speed = speed
-        self.left_dir = -1
-        self.right_dir = -1
+        with self._lock:
+            self.left_speed = speed
+            self.right_speed = speed
+            self.left_dir = -1
+            self.right_dir = -1
         
     def turn_left(self, speed=40):
         print(f"🟡 Turning LEFT at {speed}% (changing motor state)")
-        self.left_speed = speed
-        self.right_speed = speed
-        self.left_dir = -1
-        self.right_dir = 1
+        with self._lock:
+            self.left_speed = speed
+            self.right_speed = speed
+            self.left_dir = -1
+            self.right_dir = 1
         
     def turn_right(self, speed=40):
         print(f"🟡 Turning RIGHT at {speed}% (changing motor state)")
-        self.left_speed = speed
-        self.right_speed = speed
-        self.left_dir = 1
-        self.right_dir = -1
+        with self._lock:
+            self.left_speed = speed
+            self.right_speed = speed
+            self.left_dir = 1
+            self.right_dir = -1
         
     def stop(self):
         print(f"⏹️ STOPPED (changing motor state)")
-        self.left_speed = 0
-        self.right_speed = 0
+        with self._lock:
+            self.left_speed = 0
+            self.right_speed = 0
         
     def get_state(self):
-        return {
-            'left_speed': self.left_speed,
-            'right_speed': self.right_speed,
-            'left_dir': self.left_dir,
-            'right_dir': self.right_dir
-        }
+        with self._lock:
+            return {
+                'left_speed': self.left_speed,
+                'right_speed': self.right_speed,
+                'left_dir': self.left_dir,
+                'right_dir': self.right_dir
+            }
     
     def _on_closing(self):
         """Handle window closing"""
