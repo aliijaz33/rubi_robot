@@ -29,6 +29,7 @@ class Speaker:
         
     def speak(self, text):
         """Speak text using macOS 'say' command"""
+        original_threshold = None
         try:
             print(f"   🔉 Playing audio: '{text}'")
             self.is_speaking = True
@@ -36,6 +37,10 @@ class Speaker:
             # Track that we're speaking (notify recognizer)
             if self.recognizer:
                 self.recognizer.mark_speaker_active()
+                # Temporarily increase energy threshold to ignore our own speech
+                if hasattr(self.recognizer, 'recognizer') and hasattr(self.recognizer.recognizer, 'energy_threshold'):
+                    original_threshold = self.recognizer.recognizer.energy_threshold
+                    self.recognizer.recognizer.energy_threshold = 4000  # Very high to ignore speech
 
             # Use macOS built-in 'say' command
             if self.voice:
@@ -44,10 +49,18 @@ class Speaker:
                 subprocess.run(['say', text], check=True)
 
             self.is_speaking = False
+            
+            # Restore original energy threshold
+            if original_threshold is not None and self.recognizer:
+                self.recognizer.recognizer.energy_threshold = original_threshold
+                
             print(f"   ✅ Audio complete")
         except Exception as e:
             print(f"   ❌ Audio error: {e}")
             self.is_speaking = False
+            # Ensure threshold is restored even on error
+            if original_threshold is not None and self.recognizer:
+                self.recognizer.recognizer.energy_threshold = original_threshold
         
     def speak_wake_response(self):
         """Respond to wake word"""

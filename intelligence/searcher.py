@@ -64,6 +64,7 @@ class ObjectSearcher:
             return
             
         self.found_object = obj
+        self.navigating = True  # Set navigating immediately to stop scan pattern
         self.speaker.speak(f"I found a {obj['name']}!")
         
         # Small pause to let speech complete
@@ -155,7 +156,7 @@ class ObjectSearcher:
         time.sleep(0.5)
 
         # Move towards object with better distance tracking
-        target_distance = 0.07  # Stop at ~7cm (very close)
+        target_distance = 0.11  # Stop at ~11cm
         approach_speed = 30  # Slower speed for better control
         max_attempts = 12  # Allow more attempts for stable approach
         attempts = 0

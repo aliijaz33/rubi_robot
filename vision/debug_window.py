@@ -86,12 +86,9 @@ class VisionDebugWindow:
                     time.sleep(0.016)
                     continue
 
-                # During navigation, show raw frame without detection processing (much faster!)
-                # Detection adds overhead - we don't need it when already navigating
-                if self.camera.is_navigating:
-                    frame = self.camera.get_frame()
-                else:
-                    frame = self.camera.draw_detections()
+                # Always show detection frames, even during navigation
+                # This allows users to see object distances and bounding boxes while robot moves
+                frame = self.camera.draw_detections()
 
                 if frame is not None:
                     # Convert to RGB (process in background)

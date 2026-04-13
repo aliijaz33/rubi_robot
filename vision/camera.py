@@ -555,34 +555,48 @@ if __name__ == "__main__":
             return None
             
     def describe_scene(self):
-        """Generate a text description of current scene"""
+        """Generate a text description of current scene with distances"""
         objects = self.get_current_objects()
         
         if not objects:
             return "I don't see anything interesting"
-            
-        object_counts = {}
+        
+        # Group objects by type
+        objects_by_type = {}
         for obj in objects:
             name = obj['name']
-            object_counts[name] = object_counts.get(name, 0) + 1
+            if name not in objects_by_type:
+                objects_by_type[name] = []
+            objects_by_type[name].append(obj)
         
-        items = []
-        for name, count in object_counts.items():
+        # Build description parts
+        parts = []
+        
+        for obj_type, obj_list in objects_by_type.items():
+            count = len(obj_list)
+            
             if count == 1:
-                items.append(f"a {name}")
+                # Single object: "a person at 0.1m away"
+                distance = obj_list[0]['distance']
+                parts.append(f"a {obj_type} at {distance:.2f}m away")
+            elif count == 2:
+                # Two objects: "two persons, one is at 0.1m away and one is at 0.15m away"
+                distances = sorted([obj['distance'] for obj in obj_list])
+                parts.append(f"two {obj_type}s, one is at {distances[0]:.2f}m away and one is at {distances[1]:.2f}m away")
             else:
-                items.append(f"{count} {name}s")
+                # Multiple objects: "3 persons at 0.1m, 0.15m, and 0.2m away"
+                distances = sorted([obj['distance'] for obj in obj_list])
+                distance_str = ", ".join([f"{d:.2f}m" for d in distances[:-1]])
+                distance_str += f", and {distances[-1]:.2f}m"
+                parts.append(f"{count} {obj_type}s at {distance_str} away")
         
-        if len(items) == 1:
-            description = f"I see {items[0]}"
-        elif len(items) == 2:
-            description = f"I see {items[0]} and {items[1]}"
+        # Combine parts
+        if len(parts) == 1:
+            description = f"I see {parts[0]}"
+        elif len(parts) == 2:
+            description = f"I see {parts[0]} and {parts[1]}"
         else:
-            description = f"I see {', '.join(items[:-1])}, and {items[-1]}"
-        
-        if objects:
-            closest = min(objects, key=lambda x: x['distance'])
-            description += f". The {closest['name']} is closest, to your {closest['direction']}."
+            description = f"I see {', '.join(parts[:-1])}, and {parts[-1]}"
             
         return description
         

@@ -32,7 +32,7 @@ def main():
     
     # Create speaker for text-to-speech
     speaker = Speaker()
-    speaker.speak("Rubi robot initialized. Ready for commands.")
+    speaker.speak("Hello, I am Rubi the robot.")
     
     # Create camera with optimized detection
     print("📷 Initializing camera...")
