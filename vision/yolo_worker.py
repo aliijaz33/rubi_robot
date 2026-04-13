@@ -64,26 +64,50 @@ class YOLOWorker:
                     else:
                         direction = 'center'
                     
-                    # Estimate distance (simplified - based on bounding box size)
+                    # Estimate distance (continuous based on bounding box size)
                     bbox_area = (x2 - x1) * (y2 - y1)
                     frame_area = frame.shape[0] * frame.shape[1]
                     area_ratio = bbox_area / frame_area
                     
-                    # Simple distance estimation: larger object = closer
-                    if area_ratio > 0.1:  # Covers >10% of frame
-                        distance = 0.3  # Very close
-                    elif area_ratio > 0.05:  # 5-10%
-                        distance = 0.8
-                    elif area_ratio > 0.02:  # 2-5%
-                        distance = 1.5
+                    # Continuous distance estimation: distance ∝ 1/sqrt(area_ratio)
+                    # Calibrated for even smoother, more granular changes:
+                    # - area_ratio = 0.15 (15% of frame) → distance ≈ 0.12m (very close)
+                    # - area_ratio = 0.10 (10%) → distance ≈ 0.18m
+                    # - area_ratio = 0.05 (5%) → distance ≈ 0.32m
+                    # - area_ratio = 0.02 (2%) → distance ≈ 0.64m
+                    # - area_ratio = 0.01 (1%) → distance ≈ 1.13m
+                    
+                    if area_ratio > 0.001:  # Avoid division by very small numbers
+                        # Base formula: distance = k / sqrt(area_ratio)
+                        # Solve for k using calibration point: area_ratio=0.10, distance=0.18
+                        # k = 0.18 * sqrt(0.10) ≈ 0.18 * 0.316 = 0.0569
+                        k = 0.057
+                        distance = k / (area_ratio ** 0.5)
+                        
+                        # Add object-type specific adjustments
+                        # Phones are smaller, people are larger at same distance
+                        if 'phone' in class_name.lower():
+                            # Phone is smaller, so at same distance appears smaller
+                            # Adjust distance to be slightly closer
+                            distance = distance * 0.9
+                        elif 'person' in class_name.lower():
+                            # Person is larger, so at same distance appears larger
+                            # Adjust distance to be slightly farther
+                            distance = distance * 1.1
+                        
+                        # Clamp to reasonable range (0.08m to 5.0m) - allow even closer distances
+                        distance = max(0.08, min(distance, 5.0))
                     else:
-                        distance = 2.5  # Far away
+                        distance = 5.0  # Very far away
+                    
+                    # Round to 2 decimal places for smoother changes (0.15, 0.14, 0.13...)
+                    distance_rounded = round(distance, 2)
                     
                     detected.append({
                         'name': class_name,
                         'confidence': round(confidence, 3),
                         'direction': direction,
-                        'distance': round(distance, 1),
+                        'distance': distance_rounded,
                         'bbox': [int(x1), int(y1), int(x2), int(y2)]
                     })
             

@@ -155,7 +155,7 @@ class ObjectSearcher:
         time.sleep(0.5)
 
         # Move towards object with better distance tracking
-        target_distance = 0.35  # Stop at ~1 foot (one hand length)
+        target_distance = 0.07  # Stop at ~7cm (very close)
         approach_speed = 30  # Slower speed for better control
         max_attempts = 12  # Allow more attempts for stable approach
         attempts = 0

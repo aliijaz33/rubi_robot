@@ -60,20 +60,36 @@ def detect_objects(image_path):
                 else:
                     direction = "center"
                 
-                # Estimate distance (simplified)
-                object_width = x2 - x1
-                if object_width > 0:
-                    frame_width = frame.shape[1]
-                    distance = (0.08 * frame_width) / object_width  # 0.08m is phone width reference
-                    distance = max(0.3, min(distance, 5.0))  # Clamp between 30cm and 5m
+                # Estimate distance (continuous based on bounding box size)
+                bbox_area = (x2 - x1) * (y2 - y1)
+                frame_area = frame.shape[0] * frame.shape[1]
+                area_ratio = bbox_area / frame_area
+                
+                # Continuous distance estimation: distance ∝ 1/sqrt(area_ratio)
+                # Same formula as in yolo_worker.py for consistency
+                if area_ratio > 0.001:  # Avoid division by very small numbers
+                    k = 0.057
+                    distance = k / (area_ratio ** 0.5)
+                    
+                    # Add object-type specific adjustments
+                    if 'phone' in class_name.lower():
+                        distance = distance * 0.9
+                    elif 'person' in class_name.lower():
+                        distance = distance * 1.1
+                    
+                    # Clamp to reasonable range (0.08m to 5.0m)
+                    distance = max(0.08, min(distance, 5.0))
                 else:
-                    distance = 0
+                    distance = 5.0  # Very far away
+                
+                # Round to 2 decimal places for smoother changes
+                distance_rounded = round(distance, 2)
                 
                 detected.append({
                     'name': class_name,
                     'confidence': round(confidence, 2),
                     'direction': direction,
-                    'distance': round(distance, 1),
+                    'distance': distance_rounded,
                     'bbox': [int(x1), int(y1), int(x2), int(y2)]
                 })
         

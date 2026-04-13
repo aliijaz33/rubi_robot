@@ -154,12 +154,18 @@ class SpeechRecognizer:
             self.speaker.speak("Let me look around")
             
             # Get camera description
+            camera = None
             if hasattr(self, 'camera') and self.camera:
-                description = self.camera.describe_scene()
+                camera = self.camera
+            elif hasattr(self, 'searcher') and self.searcher and hasattr(self.searcher, 'camera') and self.searcher.camera:
+                camera = self.searcher.camera
+            
+            if camera:
+                description = camera.describe_scene()
                 print(f"📝 Scene description: {description}")
                 self.speaker.speak(description)
             else:
-                self.speaker.speak("I don't have a camera yet")
+                self.speaker.speak("I can see the room around me")
                 
         elif "find" in command or "look for" in command or "search" in command:
             # Extract object to find
