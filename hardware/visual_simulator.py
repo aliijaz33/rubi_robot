@@ -19,16 +19,18 @@ class VisualMotorSimulator:
     """Tkinter-based visual motor simulator"""
     
     # In visual_simulator.py, add debug_window parameter to __init__
-    def __init__(self, debug_window=None):
+    def __init__(self, debug_window=None, standalone=True, root=None):
         self.left_speed = 0
         self.right_speed = 0
         self.left_dir = 1
         self.right_dir = 1
         self.running = True
-        self.root = None
+        self.root = root  # Use provided root window if any
         self.camera = None  # Add this line
         self.debug_window = debug_window  # Add this line
         self._lock = threading.Lock()  # Thread safety for motor state
+        self.standalone = standalone  # Whether to run as standalone app
+        self.external_root = root is not None  # Track if root was provided externally
         
         print("🤖 Visual simulator initialized (waiting for GUI start...)")
         print("💡 Tip: Buttons will work once GUI opens")
@@ -44,13 +46,25 @@ class VisualMotorSimulator:
         
     def _create_gui(self):
         """Create the tkinter GUI window"""
-        self.root = tk.Tk()
-        self.root.title("🤖 RUBI ROBOT - Visual Motor Simulator")
-        self.root.geometry("800x600")
-        self.root.resizable(False, False)
-        
-        # Configure style
-        self.root.configure(bg='#2b2b2b')
+        # Only create a new root window if one wasn't provided
+        if self.root is None:
+            self.root = tk.Tk()
+            self.root.title("🤖 RUBI ROBOT - Visual Motor Simulator")
+            self.root.geometry("800x600")
+            self.root.resizable(False, False)
+            
+            # Configure style
+            self.root.configure(bg='#2b2b2b')
+        else:
+            # Don't destroy existing widgets (like the debug window)
+            # Just update the root window configuration
+            self.root.title("🤖 RUBI ROBOT - Visual Motor Simulator")
+            # Keep existing geometry and configuration
+            # Only set background if not already set
+            try:
+                self.root.configure(bg='#2b2b2b')
+            except:
+                pass
         
         # Create main frame
         main_frame = tk.Frame(self.root, bg='#2b2b2b')
@@ -168,19 +182,6 @@ class VisualMotorSimulator:
         self.root.bind('<KP_Left>', lambda event: self.turn_left(40))
         self.root.bind('<KP_Right>', lambda event: self.turn_right(40))
 
-        # After creating buttons, before self.root.focus_set()
-        # Create vision debug window if camera is available
-        if hasattr(self, 'camera') and self.camera:
-            try:
-                from vision.debug_window import VisionDebugWindow
-                self.debug_window = VisionDebugWindow(self.camera, self.root)
-                print("✅ Vision debug window created")
-            except Exception as e:
-                print(f"❌ Failed to create vision debug window: {e}")
-                self.debug_window = None
-
-
-
         # Make sure the window can receive keyboard focus
         self.root.focus_set()
 
@@ -198,8 +199,11 @@ class VisualMotorSimulator:
         # Set close handler
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
-        # Start main loop
-        self.root.mainloop()
+        # Start main loop only if standalone
+        if self.standalone:
+            self.root.mainloop()
+        else:
+            print("🖥️  Visual simulator GUI integrated with existing Tkinter application")
     
     def _draw_robot(self):
         """Draw the robot on canvas with animation"""
@@ -333,11 +337,6 @@ class VisualMotorSimulator:
         
         # Redraw robot with updated state
         self._draw_robot()
-        
-        # Update debug window if it exists
-        if self.debug_window and self.debug_window.running:
-            self.debug_window._update_display()
-
 
         # Schedule next update
         if self.root:

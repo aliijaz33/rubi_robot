@@ -1,93 +1,111 @@
 #!/usr/bin/env python3
 """
-Test script for Rubi robot with voice control, vision, and search capabilities
+Quick startup script for Rubi robot simulator.
+Run with: python test_robot.py
 """
-# Suppress OMP warnings
-import os
-os.environ['KMP_WARNINGS'] = '0'
-os.environ['OMP_NUM_THREADS'] = '1'
 
+import sys
+import os
+import threading
 import time
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from hardware.motor_factory import MotorFactory
-from speech.speech_recognizer import SpeechRecognizer
 from vision.camera import Camera
 from vision.debug_window import VisionDebugWindow
+from speech.speech_recognizer import SpeechRecognizer
+from speech.speaker import Speaker
 from intelligence.searcher import ObjectSearcher
+import tkinter as tk
 from config import Config
 
+
 def main():
-    """Main test function"""
+    print("🤖 Initializing Rubi Robot Simulator...")
     
-    print("\n" + "="*60)
-    print("   🤖 RUBI ROBOT - WITH SEARCH & VISION DEBUG")
-    print("="*60)
-    print("\n📝 Instructions:")
-    print("  • GUI window will open showing the robot")
-    print("  • DEBUG window shows camera feed with detections")
-    print("  • Voice commands:")
-    print("    - 'Rubi' → 'Yes?' → forward/backward/left/right/stop")
-    print("    - 'Rubi what do you see' - describes scene")
-    print("    - 'Rubi find chair' - SEARCHES for chair")
-    print("    - 'Rubi find person' - SEARCHES for people")
-    print("    - 'Rubi find phone' - SEARCHES for phone")
-    print("  • Close the windows to exit\n")
+    # Create root Tkinter window for motor simulator
+    root = tk.Tk()
+    root.title("Rubi Robot Simulator")
+    root.geometry("800x600")
     
-    input("Press Enter to start the simulator...")
+    # Create speaker for text-to-speech
+    speaker = Speaker()
+    speaker.speak("Rubi robot initialized. Ready for commands.")
+    
+    # Create camera with optimized detection
+    print("📷 Initializing camera...")
+    camera = Camera()
+    camera.initialize()
+    camera.start_capture()
+    
+    # Create vision debug window
+    print("👁️  Creating vision debug window...")
+    debug_window = VisionDebugWindow(camera, root)
+    
+    # Ensure debug window is visible and on top
+    if hasattr(debug_window, 'window') and debug_window.window:
+        debug_window.window.lift()  # Bring to top
+        debug_window.window.focus_force()  # Force focus
+        print("✅ Debug window raised to top")
     
     # Create motor controller
-    print("\n🔄 Creating robot simulator...")
-    motors = MotorFactory.create_motor_controller(Config.get_mode())
+    print("⚙️  Creating motor controller...")
+    motor_controller = MotorFactory.create_motor_controller(
+        mode=Config.get_mode(),
+        debug_window=debug_window,
+        root=root
+    )
     
-    # Initialize camera
-    print("\n📷 Initializing camera...")
-    camera = Camera()
-    vision_available = camera.initialize()
-    if vision_available:
-        camera.start_capture()
-        print("✅ Vision system ready!")
-    else:
-        print("⚠️ Vision disabled - continuing without camera")
-    
-    # Create speech recognizer
-    print("\n🎤 Initializing speech recognition...")
-    speech = SpeechRecognizer(motors)
+    # Start the visual simulator GUI (non-blocking since standalone=False)
+    print("🖥️  Starting visual simulator GUI...")
+    motor_controller.start_gui()
     
     # Create object searcher
-    if vision_available:
-        searcher = ObjectSearcher(motors, camera, speech.speaker)
-        speech.searcher = searcher
+    print("🔍 Creating object searcher...")
+    searcher = ObjectSearcher(motor_controller, camera, speaker)
     
-    # Attach camera to speech recognizer
-    if vision_available:
-        speech.camera = camera
+    # Create speech recognizer
+    print("🎤 Creating speech recognizer...")
+    recognizer = SpeechRecognizer(motor_controller)
+    recognizer.searcher = searcher  # Allow voice commands to trigger searches
     
-    print("\n✅ All systems ready!")
-    print("🖥️  Opening robot GUI window...\n")
+    # Start listening for voice commands in background thread
+    print("👂 Starting voice recognition...")
+    recognizer.start_listening_loop()
     
-    # Start voice recognition in background
-    speech.start_listening_loop()
+    # Display instructions
+    print("\n" + "="*60)
+    print("RUBI ROBOT READY")
+    print("="*60)
+    print("Voice commands:")
+    print("  Say 'Rubi' to wake up, then:")
+    print("  - 'what do you see' - describe current scene")
+    print("  - 'find [object]' - search for object (person, phone, chair, etc.)")
+    print("  - 'stop searching' - stop current search")
+    print("  - 'move forward', 'turn left', etc. - manual control")
+    print("  - 'stop' - stop all movement")
+    print("\nManual control:")
+    print("  Use arrow keys in simulator window:")
+    print("  ↑ = forward, ↓ = backward, ← = left, → = right, Space = stop")
+    print("="*60 + "\n")
     
-    print("🎮 Controls active:")
-    print("   • Keyboard: Arrow keys + Space")
-    print("   • Voice: Say 'Rubi' then command")
-    if vision_available:
-        print("   • Vision: 'what do you see'")
-        print("   • Search: 'find chair', 'find person', 'find phone'")
-        print("   • Debug window shows camera feed with detections")
-    
-    # Store camera and vision flag in motors for debug window
-    motors.camera = camera if vision_available else None
-    motors.vision_available = vision_available
-    
-    # Start the GUI (this blocks until window is closed)
-    motors.start_gui()
-    
-    # Clean up
-    print("\n🔄 Shutting down...")
-    speech.stop_listening()
-    if vision_available:
+    # Start the Tkinter main loop
+    print("🚀 Starting GUI... (Press Ctrl+C to exit)")
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        print("\n🛑 Shutting down...")
+    finally:
+        # Cleanup
+        print("🧹 Cleaning up...")
+        recognizer.stop_listening()
         camera.stop()
-    print("\n👋 Goodbye!")
+        motor_controller.stop()
+        root.quit()
+        print("✅ Shutdown complete.")
+
 
 if __name__ == "__main__":
     main()

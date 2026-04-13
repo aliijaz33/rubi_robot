@@ -30,11 +30,6 @@ class Camera:
         self.search_callback = None
         self.is_navigating = False  # Flag to disable YOLO during navigation
         
-        # Mock detection state
-        self.mock_distance = 1.2  # Initial mock distance
-        self.mock_distance_decrement = 0.1  # How much to decrease distance each time
-        self.mock_last_update = 0  # Time of last mock update
-        
         # Performance optimization
         self.frame_skip = 2  # Process every 2nd frame
         self.detection_interval = 0.3  # Minimum time between detections (increased from 0.1s to reduce lag)
@@ -293,22 +288,13 @@ class Camera:
             print("⚠️ Detection skipped: invalid frame")
             return
             
-        # Try YOLO detection first
+        # Run YOLO detection (authentic detection only, no mock fallback)
         detected = self._run_yolo_detection(frame)
         
-        # If YOLO detection fails (returns None), we have two options:
-        # 1. For authentic detection: don't fall back to mock, keep empty results
-        # 2. For testing: fall back to mock detection
-        # We'll use a flag to control this behavior
-        use_mock_fallback = False  # Set to True for testing, False for authentic
-        
+        # If YOLO detection fails (returns None), return empty results
         if detected is None:
-            if use_mock_fallback:
-                print("⚠️ YOLO detection failed, using mock detection for testing")
-                detected = self._mock_detection(frame)
-            else:
-                print("⚠️ YOLO detection failed, returning empty results for authentic detection")
-                detected = []  # Empty list means no objects detected
+            print("⚠️ YOLO detection failed, returning empty results")
+            detected = []  # Empty list means no objects detected
         
         # Always update detected_objects, even if empty
         # Sort by distance if we have objects
@@ -382,42 +368,6 @@ class Camera:
             print(f"⚠️ YOLO detection error: {e}")
             return None
     
-    def _mock_detection(self, frame):
-        """Mock detection for testing when YOLO fails"""
-        import random
-        import time
-        
-        # If we're navigating, simulate decreasing distance
-        if self.is_navigating:
-            current_time = time.time()
-            # Decrease distance slowly over time (simulating robot moving closer)
-            if current_time - self.mock_last_update > 1.0:  # Every second
-                self.mock_distance = max(0.3, self.mock_distance - self.mock_distance_decrement)
-                self.mock_last_update = current_time
-        
-        # Create mock objects
-        mock_objects = []
-        
-        # Always include the search target if we're searching
-        if self.searching and self.search_target:
-            target_name = 'cell phone' if self.search_target == 'phone' else self.search_target
-            mock_objects.append({
-                'name': target_name,
-                'confidence': 0.75,
-                'direction': 'center' if random.random() > 0.5 else random.choice(['left', 'right']),
-                'distance': round(self.mock_distance, 1),
-                'bbox': [300, 200, 350, 250]
-            })
-        
-        # Add some random other objects
-        if random.random() > 0.3:  # 70% chance to add extra objects
-            other_objects = [
-                {'name': 'person', 'confidence': 0.85, 'direction': 'left', 'distance': 2.5, 'bbox': [200, 150, 300, 350]},
-                {'name': 'chair', 'confidence': 0.72, 'direction': 'right', 'distance': 1.8, 'bbox': [100, 200, 180, 300]},
-            ]
-            mock_objects.extend(other_objects[:random.randint(0, 1)])  # Add 0-1 extra objects
-        
-        return mock_objects
 
     def _start_detection_thread(self, frame):
         """Start a background detection thread if one is not already running."""
@@ -638,17 +588,6 @@ if __name__ == "__main__":
         
     def find_object(self, target_name):
         """Find a specific object"""
-        import time
-        
-        # If we're navigating, update mock distance before returning objects
-        if self.is_navigating and self.search_target == target_name:
-            current_time = time.time()
-            # Decrease distance slowly over time (simulating robot moving closer)
-            if current_time - self.mock_last_update > 1.0:  # Every second
-                self.mock_distance = max(0.3, self.mock_distance - self.mock_distance_decrement)
-                self.mock_last_update = current_time
-                print(f"📏 Mock distance updated to {self.mock_distance:.2f}m")
-        
         objects = self.get_current_objects()
         
         target_map = {
@@ -669,13 +608,7 @@ if __name__ == "__main__":
         if not matches:
             return None
         
-        # If we're navigating and using mock detection, ensure the distance is current
-        if self.is_navigating and matches and self.search_target == target_name:
-            # Update the distance in the match to current mock_distance
-            for match in matches:
-                if match['name'] in ['cell phone', 'phone'] and target_name == 'phone':
-                    match['distance'] = round(self.mock_distance, 1)
-        
+        # Return the closest match (authentic detection only)
         return min(matches, key=lambda x: x['distance'])
         
     def draw_detections(self, frame=None):
@@ -713,15 +646,9 @@ if __name__ == "__main__":
         
     def start_search(self, target, callback):
         """Start searching for an object"""
-        import time
         self.searching = True
         self.search_target = target
         self.search_callback = callback
-        # Reset mock distance for new search
-        self.mock_distance = 1.2
-        self.mock_last_update = time.time()
-        print(f"🔍 Search started for {target}, mock distance reset to 1.2m")
-        self.mock_last_update = 0
         print(f"🔍 Started searching for {target}")
         
     def stop_search(self):
@@ -740,11 +667,17 @@ if __name__ == "__main__":
         """Stop camera capture"""
         self.running = False
         self.searching = False
-        if self.capture_thread and self.capture_thread.is_alive():
+        
+        # Stop capture thread if it exists
+        if hasattr(self, 'capture_thread') and self.capture_thread and self.capture_thread.is_alive():
             self.capture_thread.join(timeout=1.0)
-        if self.detection_thread and self.detection_thread.is_alive():
+        
+        # Stop detection thread if it exists
+        if hasattr(self, 'detection_thread') and self.detection_thread and self.detection_thread.is_alive():
             self.detection_thread.join(timeout=1.0)
-        if self.camera:
+        
+        # Release camera if it exists
+        if hasattr(self, 'camera') and self.camera:
             self.camera.release()
         
         # Stop persistent YOLO worker
