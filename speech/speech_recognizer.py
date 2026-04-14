@@ -26,8 +26,8 @@ class SpeechRecognizer:
 
         # Track when speaker last spoke to avoid audio feedback
         self.last_speak_time = 0
-        self.speaker_cooldown = 2.0  # Wait 2 seconds after speaker finishes (for wake word detection only)
-        self.speech_guard_period = 1.5  # Completely ignore any recognition during this period
+        self.speaker_cooldown = 2.0  # Wait 3 seconds after speaker finishes (for wake word detection only)
+        self.speech_guard_period = 1.5  # Completely ignore any recognition during this period (increased from 1.5)
 
         # Adjust recognizer settings for maximum distance sensitivity
         # Much lower energy threshold makes microphone extremely sensitive (default is 300)
@@ -98,12 +98,12 @@ class SpeechRecognizer:
             return "speaker_active"  # Different return value for speech guard
 
         # For commands, listen immediately after guard period
-        # Increased timeout and phrase time limit for maximum distance recognition
+        # Set timeout to 3 seconds for precise 45-second total sleep timeout (15 × 3s = 45s)
         with self.microphone as source:
             try:
                 print("🎯 Listening for command (ULTRA sensitive for distance)...")
-                # Increased timeout from 5 to 7 seconds, phrase_time_limit from 3 to 5 seconds
-                audio = self.recognizer.listen(source, timeout=7, phrase_time_limit=5)
+                # Timeout of 3 seconds for precise sleep timing
+                audio = self.recognizer.listen(source, timeout=3, phrase_time_limit=5)
 
                 command = self.recognizer.recognize_google(audio).lower()
                 print(f"📝 Command: '{command}'")
@@ -112,7 +112,7 @@ class SpeechRecognizer:
                 return command
 
             except sr.WaitTimeoutError:
-                print("⏰ No command heard (timeout after 7 seconds)")
+                print("⏰ No command heard (timeout after 3 seconds)")
                 return "audio_timeout"  # Different return value for actual audio timeout
             except sr.UnknownValueError:
                 print("❌ Could not understand audio (possibly too quiet or unclear)")
@@ -136,16 +136,43 @@ class SpeechRecognizer:
             
         print(f"⚙️ Processing: '{command}'")
         
-        # Check for stop command first
+        # Check for stop command first (always process stop even if robot is active)
         if any(word in command for word in ["stop", "halt", "brake", "stop now", "stop searching"]):
             print("🛑 STOP command - stopping all movement and search")
+            
+            # Check if robot is actually doing something before speaking
+            robot_was_active = self._is_robot_active()
+            
             self.motor.stop()
             
             # Stop any ongoing search
             if hasattr(self, 'searcher') and self.searcher:
                 self.searcher.stop_searching()
                 
-            self.speaker.speak("Stopping")
+            # Only speak if robot was actually doing something
+            if robot_was_active:
+                self.speaker.speak("Stopping")
+            else:
+                print("   🤖 Robot was already stopped, not speaking")
+                
+            return True
+            
+        # If robot is actively performing a task (searching, navigating, moving),
+        # we should still allow movement commands to change direction
+        # but block other commands like "find" or "what do you see"
+        robot_is_active = self._is_robot_active()
+        
+        # Define movement command keywords
+        movement_keywords = ["forward", "backward", "back", "left", "right", "move", "go", "turn", "rotate", "spin", "ahead", "straight", "proceed", "advance", "reverse", "retreat"]
+        
+        # Check if this is a movement command
+        is_movement_command = any(keyword in command for keyword in movement_keywords)
+        
+        # If robot is active and this is NOT a movement command, ignore it
+        # (except stop which was already handled above)
+        if robot_is_active and not is_movement_command:
+            print("🤖 Robot is busy (searching/navigating), ignoring non-movement command")
+            # Don't speak to avoid interrupting
             return True
             
         # Check for sleep commands before movement commands (important for "go to sleep")
@@ -156,21 +183,23 @@ class SpeechRecognizer:
             return False
             
         # Check for movement commands with multiple synonyms
-        # Forward movement synonyms - "move" alone means forward
-        forward_keywords = ["forward", "go", "move", "move forward", "go forward", "move ahead", "ahead", "straight", "proceed", "advance"]
+        # Check more specific commands first to avoid misclassification
+        # "move backward" should be recognized as backward, not forward
         backward_keywords = ["backward", "back", "move back", "go back", "move backward", "reverse", "backwards", "retreat"]
+        forward_keywords = ["forward", "go", "move", "move forward", "go forward", "move ahead", "ahead", "straight", "proceed", "advance"]
         left_keywords = ["left", "turn left", "go left", "move left", "rotate left", "spin left"]
         right_keywords = ["right", "turn right", "go right", "move right", "rotate right", "spin right"]
         
-        if any(keyword in command for keyword in forward_keywords):
-            print("➡️ FORWARD command")
-            self.motor.forward(60)
-            self.speaker.speak("Moving forward")
-            
-        elif any(keyword in command for keyword in backward_keywords):
+        # Check backward first (more specific) to avoid "move backward" matching "move" in forward_keywords
+        if any(keyword in command for keyword in backward_keywords):
             print("⬅️ BACKWARD command")
             self.motor.backward(60)
             self.speaker.speak("Moving backward")
+            
+        elif any(keyword in command for keyword in forward_keywords):
+            print("➡️ FORWARD command")
+            self.motor.forward(60)
+            self.speaker.speak("Moving forward")
             
         elif any(keyword in command for keyword in left_keywords):
             print("↪️ LEFT command")
@@ -291,7 +320,7 @@ class SpeechRecognizer:
                 print(f"❌ Speaker error on startup: {e}")
 
             command_timeout_count = 0
-            MAX_TIMEOUTS = 6  # 6 timeouts * 7 seconds each = 42 seconds (close to 45)
+            MAX_TIMEOUTS = 15  # 15 timeouts * 3 seconds each = 45 seconds (exact)
 
             while self.listening:
                 if self.listen_for_wake_word():
@@ -332,7 +361,7 @@ class SpeechRecognizer:
                                 continue
                             
                             command_timeout_count += 1
-                            print(f"⏰ Command timeout #{command_timeout_count}/{MAX_TIMEOUTS} (7 seconds no speech)")
+                            print(f"⏰ Command timeout #{command_timeout_count}/{MAX_TIMEOUTS} (3 seconds no speech)")
                             if command_timeout_count >= MAX_TIMEOUTS:
                                 print("🔄 Exiting command mode after 45 seconds of inactivity, listening for wake word again")
                                 command_loop_active = False
